@@ -1,0 +1,13 @@
+country_code,crop_name,Partner,irrigation,hired_workers,area,labelsAnswersMap
+IN,Wheat,PartnerA,True,5,10,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""Yes""}, {""soaId"": ""CM-5"", ""answer"": ""Good""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+IN,Rice,PartnerB,False,2,5,"[{""soaId"": ""BH-1"", ""answer"": ""No""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Average""}, {""soaId"": ""WQ-3"", ""answer"": ""Option2""}]"
+US,Corn,PartnerA,True,10,50,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Excellent""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+IN,Wheat,PartnerA,True,4,12,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""Yes""}, {""soaId"": ""CM-5"", ""answer"": ""Good""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+US,Corn,PartnerB,False,1,2,"[{""soaId"": ""BH-1"", ""answer"": ""No""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Poor""}, {""soaId"": ""WQ-3"", ""answer"": ""Option2""}]"
+IN,Rice,PartnerA,True,6,8,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""Yes""}, {""soaId"": ""CM-5"", ""answer"": ""Good""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+IN,Wheat,PartnerB,False,3,6,"[{""soaId"": ""BH-1"", ""answer"": ""No""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Average""}, {""soaId"": ""WQ-3"", ""answer"": ""Option3""}]"
+US,Soybean,PartnerA,True,8,30,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Excellent""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+IN,Rice,PartnerB,True,4,9,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""Yes""}, {""soaId"": ""CM-5"", ""answer"": ""Good""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+US,Corn,PartnerA,False,1,3,"[{""soaId"": ""BH-1"", ""answer"": ""No""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Poor""}, {""soaId"": ""WQ-3"", ""answer"": ""Option2""}]"
+US,Soybean,PartnerB,True,12,60,"[{""soaId"": ""BH-1"", ""answer"": ""Yes""}, {""soaId"": ""BH-2"", ""answer"": ""Yes""}, {""soaId"": ""CM-5"", ""answer"": ""Excellent""}, {""soaId"": ""WQ-3"", ""answer"": ""Option1""}]"
+IN,Wheat,PartnerA,False,2,4,"[{""soaId"": ""BH-1"", ""answer"": ""No""}, {""soaId"": ""BH-2"", ""answer"": ""No""}, {""soaId"": ""CM-5"", ""answer"": ""Average""}, {""soaId"": ""WQ-3"", ""answer"": ""Option2""}]"
