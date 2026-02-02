@@ -24,7 +24,7 @@ class Config:
     
     # Feature Configuration
     FEATURE_COLUMNS = [
-        'country_code', 'crop_name', 'Partner', 'irrigation', 'hired_workers', 'area'
+        'country_code', 'crop_name', 'partner', 'irrigation', 'hired_workers', 'area'
     ]
 
     # Confidence Thresholds

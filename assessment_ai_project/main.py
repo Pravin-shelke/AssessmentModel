@@ -23,7 +23,7 @@ def main():
     test_input = {
         'country_code': 'IN',
         'crop_name': 'Wheat',
-        'Partner': 'PartnerA',
+        'partner': 'PartnerA',
         'irrigation': True,
         'hired_workers': 5,
         'area': 10

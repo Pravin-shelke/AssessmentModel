@@ -2,3 +2,5 @@
 /.github
 /.venv
 /__pycache__
+/assessment_ai_project/models/
+/assessment_ai_project/data/predicted_assessment.csv

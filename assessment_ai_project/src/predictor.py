@@ -33,6 +33,8 @@ class AssessmentPredictor:
         self.save_checkpoint()
         
     def predict(self, input_dict):
+        if 'Partner' in input_dict and 'partner' not in input_dict:
+            input_dict['partner'] = input_dict['Partner']
         features = self.engineer.transform(input_dict)
         X_input = np.array(features).reshape(1, -1)
         
