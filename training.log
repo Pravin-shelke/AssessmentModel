@@ -1,0 +1,24 @@
+2026-02-27 10:01:39,471 INFO Loading data from mock_test_data.csv (mock format)...
+2026-02-27 10:01:39,473 INFO Loaded 12 records.
+2026-02-27 10:01:39,478 INFO Found 4 indicator columns.
+2026-02-27 10:01:39,478 INFO Preparing training data...
+2026-02-27 10:01:39,480 INFO Feature encoding complete.
+2026-02-27 10:01:39,480 INFO Training models...
+2026-02-27 10:01:39,632 INFO Training complete. Trained: 4, Skipped: 0
+2026-02-27 10:01:39,632 INFO Saving models to xgboost_balaji_models.pkl...
+2026-02-27 10:01:39,637 INFO Models saved! File size: 0.3 MB
+2026-02-27 10:01:39,637 INFO Loading models from xgboost_balaji_models.pkl...
+2026-02-27 10:01:39,641 INFO Loaded 4 trained models
+
+--- Test Prediction ---
+2026-02-27 10:01:39,641 INFO Predicting assessment for: IN, Wheat, PartnerA, True, 5, 10
+2026-02-27 10:01:39,643 INFO Predictions complete. Total: 3, High confidence (≥80%): 1, Avg confidence: 82.5%
+2026-02-27 10:01:39,643 INFO Exporting predictions to predicted_assessment.csv...
+2026-02-27 10:01:39,645 INFO Predictions exported to predicted_assessment.csv. Total indicators: 3
+Predictions for {'country': 'IN', 'crop': 'Wheat', 'partner': 'PartnerA', 'irrigation': True, 'hired_workers': 5, 'area': 10}:
+BH-1: {'value': 'Yes', 'confidence': 81.22959899902344, 'policy': 'auto', 'source': 'xgboost'}
+BH-2: {'value': 'Yes', 'confidence': 75.83011627197266, 'policy': 'suggest', 'source': 'xgboost'}
+WQ-3: {'suggestedOptions': ['Option1'], 'confidence': 90.41201782226562, 'policy': 'suggest', 'source': 'xgboost'}
+
+Check 'predicted_assessment.csv' for full results.
+2026-02-27 10:01:39,645 INFO Model coverage: 4/4 indicators (100.0%)

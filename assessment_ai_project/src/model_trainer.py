@@ -1,5 +1,9 @@
 import xgboost as xgb
+import pandas as pd
+import numpy as np
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.metrics import accuracy_score, f1_score
 import logging
 from .config import Config
 
@@ -27,23 +31,81 @@ class ModelTrainer:
             # Determine Objective
             num_classes = len(le_target.classes_)
             params = Config.MODEL_PARAMS.copy()
-            
+
             if num_classes == 2:
                 params['objective'] = 'binary:logistic'
             else:
-                params['objective'] = 'multi:softmax'
+                # multi:softprob (not softmax) to get real probabilities for confidence
+                params['objective'] = 'multi:softprob'
                 params['num_class'] = num_classes
-                
+
             try:
+                # 80/20 train/test split — with fallbacks for rare-class indicators
+                n_samples = len(X_valid)
+                split_ok = False
+
+                if n_samples >= 50:
+                    try:
+                        can_stratify = (
+                            num_classes <= 20 and
+                            min(pd.Series(y_encoded).value_counts()) >= 2
+                        )
+                        X_train, X_test, y_train, y_test = train_test_split(
+                            X_valid, y_encoded, test_size=0.2, random_state=42,
+                            stratify=y_encoded if can_stratify else None
+                        )
+                        # Ensure all classes appear in training split (XGBoost requirement)
+                        if len(set(y_train)) == num_classes:
+                            split_ok = True
+                        else:
+                            logging.debug(f"{target_col}: not all classes in train split, falling back to full data")
+                    except Exception:
+                        pass
+
+                if not split_ok:
+                    # Use full data for both train and eval when split isn't feasible
+                    X_train, X_test, y_train, y_test = X_valid, X_valid, y_encoded, y_encoded
+
                 model = xgb.XGBClassifier(**params)
-                model.fit(X_valid, y_encoded)
-                
+                model.fit(X_train, y_train)
+
+                y_pred = model.predict(X_test)
+                accuracy = float(accuracy_score(y_test, y_pred))
+                avg_type = 'binary' if num_classes == 2 else 'weighted'
+                f1 = float(f1_score(y_test, y_pred, average=avg_type, zero_division=0))
+
+                # Cross-validation accuracy for more reliable estimate (when enough data)
+                cv_accuracy = accuracy
+                if n_samples >= 100 and len(set(y_encoded)) >= 2:
+                    try:
+                        n_splits = min(5, min(pd.Series(y_encoded).value_counts()))
+                        n_splits = max(2, int(n_splits))
+                        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                        cv_scores = cross_val_score(
+                            xgb.XGBClassifier(**params), X_valid, y_encoded,
+                            cv=cv, scoring='accuracy'
+                        )
+                        cv_accuracy = float(np.mean(cv_scores))
+                    except Exception:
+                        pass  # fall back to single-split accuracy
+
                 self.models[target_col] = {
                     'model': model,
                     'encoder': le_target,
-                    'feature_names': feature_names # Save schema
+                    'feature_names': feature_names,
+                    'accuracy': round(cv_accuracy, 4),   # cross-validated when possible
+                    'holdout_accuracy': round(accuracy, 4),
+                    'f1_score': round(f1, 4),
+                    'num_classes': num_classes,
+                    'training_samples': len(X_train),
+                    'test_samples': len(X_test),
+                    'classes': list(le_target.classes_),
                 }
                 trained_count += 1
+                logging.info(
+                    f"  [{target_col}] acc={accuracy:.3f} f1={f1:.3f} "
+                    f"classes={num_classes} train_n={len(X_train)}"
+                )
             except Exception as e:
                 logging.warning(f"Training failed for {target_col}: {e}")
                 

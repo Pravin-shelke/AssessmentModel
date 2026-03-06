@@ -1,0 +1,20 @@
+{
+  "_usage": "Add localized crop name overrides only. Identity entries are ignored.",
+  "ARROZ": "Rice",
+  "AGUACATE": "Avocado",
+  "AVENA": "Oats",
+  "Aardappelen": "Potato",
+  "Tarwe": "Wheat",
+  "Weizen": "Wheat",
+  "Mais": "Corn",
+  "Kartoffeln": "Potato",
+  "Wintergerste": "Barley",
+  "Sonnenblume": "Sunflower",
+  "Soja": "Soybeans",
+  "Orzo": "Barley",
+  "Erba Medica": "Alfalfa",
+  "Frumento (Wheat)": "Wheat",
+  "rijst": "Rice",
+  "Pepino": "Cucumber",
+  "Tomate": "Tomato"
+}

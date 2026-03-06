@@ -11,4 +11,4 @@ echo "If this fails, please ensure you have installed dependencies:"
 echo "pip install flask flask-cors pandas xgboost scikit-learn numpy"
 echo "---------------------------------------------------"
 
-python3 src/api_server.py
+python3 -m src.api_server

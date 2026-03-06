@@ -26,7 +26,8 @@ def main():
         'partner': 'PartnerA',
         'irrigation': True,
         'hired_workers': 5,
-        'area': 10
+        'area': 10,
+        'planYear': 2024,
     }
     
     preds = app.predict(test_input)
