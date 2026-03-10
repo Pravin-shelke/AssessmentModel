@@ -9,7 +9,11 @@ class Config:
 
     TRAIN_DATA_FILE = os.path.join(DATA_DIR, 'mock_test_uncopied_data.csv')
     MODEL_FILE = os.path.join(MODELS_DIR, 'xgboost_models.pkl')
-    PREDICTIONS_FILE = os.path.join(DATA_DIR, 'predicted_assessment.csv')
+    PREDICTIONS_FILE = os.path.join(DATA_DIR, 'predicted_assessment.csv')  # kept for legacy export
+
+    # SQLite database — replaces predicted_assessment.csv and feedback.jsonl
+    # as the primary store for prediction history, feedback, and model versions.
+    DB_FILE = os.path.join(DATA_DIR, 'assessment_ai.db')
 
     # Optional user-editable file for localized crop name overrides only.
     # e.g. { "Blé": "Wheat", "ARROZ": "Rice" }
@@ -29,6 +33,18 @@ class Config:
         'eval_metric': 'logloss',
     }
 
+    # Hyperparameter tuning — set True to enable GridSearchCV (slower, higher accuracy).
+    # Recommended only when retraining with 500+ rows per indicator.
+    ENABLE_HYPERPARAMETER_TUNING = False
+
+    # Search space for GridSearchCV (used when ENABLE_HYPERPARAMETER_TUNING = True)
+    HYPERPARAM_GRID = {
+        'max_depth':     [3, 5, 7],
+        'n_estimators':  [100, 200, 300],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'subsample':     [0.7, 0.8, 1.0],
+    }
+
     # Minimum non-null samples required to train a model for a given indicator
     MIN_TRAINING_SAMPLES = 20
 
@@ -40,11 +56,20 @@ class Config:
         'country_code',
         'crop_name',
         'partner',
-        'subpartner',      # regional sub-program — already in CSV, improves indicator accuracy
+        'subpartner',      # regional sub-program — 97% null in current CSV but included for future data
         'irrigation',
         'hired_workers',
         'area',
         'planYear',
+        # ── Future features ──────────────────────────────────────────────────────
+        # Add columns here AND to your CSV / Plan API payload before enabling them.
+        # DO NOT add columns that don't exist in the training CSV — they will add
+        # only noise (all rows will become "Unknown"/0) and HURT model accuracy.
+        #
+        # 'season',               # Kharif / Rabi / Spring / Summer
+        # 'soil_type',            # Clay / Loam / Sandy / Silt
+        # 'farm_age',             # years since farm established (numeric)
+        # 'certification_status', # Organic / Conventional / Transitioning
     ]
 
     # Confidence thresholds for UI policy decision
@@ -68,3 +93,24 @@ class Config:
         """Called by AssessmentPredictor after training or loading a checkpoint."""
         cls.QUESTION_META = meta
         cls._cache_size = len(meta)  # for logging only
+
+    @classmethod
+    def get_versioned_model_path(cls):
+        """Returns a timestamped versioned path and a version label for rollback support."""
+        import datetime
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        version_dir = os.path.join(cls.MODELS_DIR, f'v_{ts}')
+        os.makedirs(version_dir, exist_ok=True)
+        return os.path.join(version_dir, 'xgboost_models.pkl'), f'v_{ts}'
+
+    @classmethod
+    def list_model_versions(cls):
+        """Returns all saved versioned checkpoints, newest first."""
+        if not os.path.exists(cls.MODELS_DIR):
+            return []
+        versions = []
+        for name in sorted(os.listdir(cls.MODELS_DIR), reverse=True):
+            pkl_path = os.path.join(cls.MODELS_DIR, name, 'xgboost_models.pkl')
+            if name.startswith('v_') and os.path.exists(pkl_path):
+                versions.append({'version': name, 'path': pkl_path})
+        return versions

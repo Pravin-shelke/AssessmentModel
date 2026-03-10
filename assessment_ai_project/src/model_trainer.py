@@ -2,8 +2,9 @@ import xgboost as xgb
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, GridSearchCV
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
+from sklearn.utils.class_weight import compute_sample_weight
 import logging
 from .config import Config
 
@@ -66,13 +67,49 @@ class ModelTrainer:
                     # Use full data for both train and eval when split isn't feasible
                     X_train, X_test, y_train, y_test = X_valid, X_valid, y_encoded, y_encoded
 
-                model = xgb.XGBClassifier(**params)
-                model.fit(X_train, y_train)
+                # ── Class imbalance handling ──────────────────────────────────
+                # Binary: let XGBoost re-weight the minority class automatically.
+                # Multi-class: compute per-sample weights so no external lib is needed.
+                if num_classes == 2:
+                    counts = np.bincount(y_train)
+                    # scale_pos_weight = negative_count / positive_count
+                    params['scale_pos_weight'] = float(counts[0]) / float(counts[1]) if counts[1] > 0 else 1.0
+                    sample_weights = None
+                else:
+                    sample_weights = compute_sample_weight('balanced', y_train)
+
+                # ── Hyperparameter tuning (optional, off by default) ──────────
+                if Config.ENABLE_HYPERPARAMETER_TUNING and n_samples >= 500:
+                    base = xgb.XGBClassifier(
+                        random_state=42, verbosity=0, eval_metric='logloss',
+                        objective=params['objective'],
+                        **({'num_class': num_classes} if num_classes > 2 else {}),
+                    )
+                    n_splits_gs = min(3, min(pd.Series(y_train).value_counts()))
+                    n_splits_gs = max(2, int(n_splits_gs))
+                    cv_gs = StratifiedKFold(n_splits=n_splits_gs, shuffle=True, random_state=42)
+                    grid = GridSearchCV(
+                        base, Config.HYPERPARAM_GRID, cv=cv_gs,
+                        scoring='accuracy', n_jobs=-1, refit=True
+                    )
+                    fit_kwargs = {'sample_weight': sample_weights} if sample_weights is not None else {}
+                    grid.fit(X_train, y_train, **fit_kwargs)
+                    model = grid.best_estimator_
+                    logging.info(f"  [{target_col}] GridSearchCV best params: {grid.best_params_}")
+                else:
+                    model = xgb.XGBClassifier(**params)
+                    fit_kwargs = {'sample_weight': sample_weights} if sample_weights is not None else {}
+                    model.fit(X_train, y_train, **fit_kwargs)
 
                 y_pred = model.predict(X_test)
                 accuracy = float(accuracy_score(y_test, y_pred))
                 avg_type = 'binary' if num_classes == 2 else 'weighted'
                 f1 = float(f1_score(y_test, y_pred, average=avg_type, zero_division=0))
+                precision = float(precision_score(y_test, y_pred, average=avg_type, zero_division=0))
+                recall = float(recall_score(y_test, y_pred, average=avg_type, zero_division=0))
+
+                # Per-class accuracy from confusion matrix
+                cm = confusion_matrix(y_test, y_pred).tolist()
 
                 # Cross-validation accuracy for more reliable estimate (when enough data)
                 cv_accuracy = accuracy
@@ -96,6 +133,9 @@ class ModelTrainer:
                     'accuracy': round(cv_accuracy, 4),   # cross-validated when possible
                     'holdout_accuracy': round(accuracy, 4),
                     'f1_score': round(f1, 4),
+                    'precision': round(precision, 4),
+                    'recall': round(recall, 4),
+                    'confusion_matrix': cm,
                     'num_classes': num_classes,
                     'training_samples': len(X_train),
                     'test_samples': len(X_test),
@@ -104,6 +144,7 @@ class ModelTrainer:
                 trained_count += 1
                 logging.info(
                     f"  [{target_col}] acc={accuracy:.3f} f1={f1:.3f} "
+                    f"prec={precision:.3f} rec={recall:.3f} "
                     f"classes={num_classes} train_n={len(X_train)}"
                 )
             except Exception as e:

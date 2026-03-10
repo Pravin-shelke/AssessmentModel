@@ -357,26 +357,36 @@ class AssessmentPredictor:
     # ──────────────────────────────────────────────────────────────
     # 5. ACTIVE LEARNING — incorporate feedback into retraining
     # ──────────────────────────────────────────────────────────────
-    def apply_feedback_to_training(self, min_corrections=10):
+    def apply_feedback_to_training(self, min_corrections=10, db=None):
         """
-        Reads feedback.jsonl and retrains models that have ≥ min_corrections.
+        Reads feedback from the database (or feedback.jsonl as fallback) and
+        retrains models that have ≥ min_corrections user corrections.
         Returns dict of retrained indicators and their new accuracies.
         """
-        feedback_file = os.path.join(Config.DATA_DIR, 'feedback.jsonl')
-        if not os.path.exists(feedback_file):
-            return {"retrained": [], "message": "No feedback file found"}
-
-        # Group feedback by indicator
+        # Prefer database; fall back to legacy JSONL file
         corrections = {}
-        with open(feedback_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    entry = json.loads(line.strip())
-                    ind = entry.get('indicator')
-                    if ind:
-                        corrections.setdefault(ind, []).append(entry)
-                except Exception:
-                    continue
+        if db is not None:
+            entries = db.get_all_feedback_as_jsonl_entries()
+            for entry in entries:
+                ind = entry.get('indicator')
+                if ind:
+                    corrections.setdefault(ind, []).append(entry)
+        else:
+            feedback_file = os.path.join(Config.DATA_DIR, 'feedback.jsonl')
+            if not os.path.exists(feedback_file):
+                return {"retrained": [], "message": "No feedback source found"}
+            with open(feedback_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        ind = entry.get('indicator')
+                        if ind:
+                            corrections.setdefault(ind, []).append(entry)
+                    except Exception:
+                        continue
+
+        if not corrections:
+            return {"retrained": [], "message": "No feedback entries found"}
 
         retrained = []
         for indicator, entries in corrections.items():
@@ -434,6 +444,9 @@ class AssessmentPredictor:
             indicator: {
                 'accuracy': packet.get('accuracy'),
                 'f1_score': packet.get('f1_score'),
+                'precision': packet.get('precision'),
+                'recall': packet.get('recall'),
+                'confusion_matrix': packet.get('confusion_matrix'),
                 'num_classes': packet.get('num_classes'),
                 'training_samples': packet.get('training_samples'),
                 'classes': packet.get('classes', []),
@@ -449,27 +462,63 @@ class AssessmentPredictor:
             'df_raw': self.df_raw,         # for similar farm display
         }
         os.makedirs(Config.MODELS_DIR, exist_ok=True)
-        joblib.dump(state, Config.MODEL_FILE)
-        logging.info(f"Model checkpoint saved: {len(self.models)} models → {Config.MODEL_FILE}")
+
+        # ── Versioned checkpoint ──────────────────────────────────────────────
+        # Each retrain creates a new timestamped folder (e.g. models/v_20260310_143000/).
+        # The latest version is also written to the canonical MODEL_FILE path so
+        # existing load_checkpoint() callers continue to work without changes.
+        versioned_path, version_label = Config.get_versioned_model_path()
+        joblib.dump(state, versioned_path)
+        joblib.dump(state, Config.MODEL_FILE)   # keep canonical path in sync
+        logging.info(
+            f"Checkpoint saved: {len(self.models)} models → "
+            f"version={version_label}  canonical={Config.MODEL_FILE}"
+        )
         avg_acc = sum(v['accuracy'] for v in model_summary.values() if v['accuracy']) / max(len(model_summary), 1)
         logging.info(f"Average model accuracy: {avg_acc:.3f}")
+
+        # Register version in the database (best-effort)
+        try:
+            from .database import AssessmentDB
+            from .config import Config as _Cfg
+            _db = AssessmentDB(_Cfg.DB_FILE)
+            training_rows = len(self.df_raw) if self.df_raw is not None else 0
+            _db.register_model_version(
+                version=version_label,
+                model_path=versioned_path,
+                total_models=len(self.models),
+                avg_accuracy=round(avg_acc * 100, 2),
+                training_rows=training_rows,
+            )
+        except Exception as db_err:
+            logging.debug(f"Model registry DB write skipped: {db_err}")
 
     def load_checkpoint(self):
         if not os.path.exists(Config.MODEL_FILE):
             raise FileNotFoundError(f"No checkpoint found at {Config.MODEL_FILE}")
         state = joblib.load(Config.MODEL_FILE)
+        self._apply_state(state)
+        logging.info(f"Checkpoint loaded: {len(self.models)} models | "
+                     f"{len(Config.QUESTION_META)} indicators in question_meta")
+
+    def load_checkpoint_version(self, version: str):
+        """Load a specific versioned checkpoint for rollback. version = e.g. 'v_20260310_143000'"""
+        versions = {v['version']: v['path'] for v in Config.list_model_versions()}
+        if version not in versions:
+            raise FileNotFoundError(f"Version '{version}' not found. Available: {list(versions.keys())}")
+        state = joblib.load(versions[version])
+        self._apply_state(state)
+        logging.info(f"Rolled back to checkpoint version: {version}")
+
+    def _apply_state(self, state):
         self.models = state['models']
         self.engineer = state['engineer']
         self.model_summary = state.get('model_summary', {})
-        self.X_encoded = state.get('X_encoded')      # KNN data
-        self.df_raw = state.get('df_raw')            # KNN display
-        self._knn = None                              # rebuild lazily
-        self._shap_explainers = {}                    # reset cache
-
-        saved_meta = state.get('question_meta', {})
-        Config.set_question_meta(saved_meta)
-        logging.info(f"Checkpoint loaded: {len(self.models)} models | "
-                     f"{len(saved_meta)} indicators in question_meta")
+        self.X_encoded = state.get('X_encoded')
+        self.df_raw = state.get('df_raw')
+        self._knn = None
+        self._shap_explainers = {}
+        Config.set_question_meta(state.get('question_meta', {}))
 
     def get_model_stats(self):
         """Returns per-indicator accuracy stats for the /health and /models endpoints."""
@@ -479,14 +528,22 @@ class AssessmentPredictor:
                 ind: {
                     'accuracy': p.get('accuracy'),
                     'f1_score': p.get('f1_score'),
+                    'precision': p.get('precision'),
+                    'recall': p.get('recall'),
                     'num_classes': p.get('num_classes'),
                     'training_samples': p.get('training_samples'),
                 }
                 for ind, p in self.models.items()
             }
         accuracies = [v['accuracy'] for v in summary.values() if v.get('accuracy') is not None]
+        f1_scores  = [v['f1_score'] for v in summary.values() if v.get('f1_score') is not None]
+        precisions = [v['precision'] for v in summary.values() if v.get('precision') is not None]
+        recalls    = [v['recall'] for v in summary.values() if v.get('recall') is not None]
         return {
             'total_models': len(self.models),
-            'average_accuracy': round(sum(accuracies) / len(accuracies), 4) if accuracies else 0,
+            'average_accuracy':  round(sum(accuracies)  / len(accuracies),  4) if accuracies  else 0,
+            'average_f1':        round(sum(f1_scores)   / len(f1_scores),   4) if f1_scores   else 0,
+            'average_precision': round(sum(precisions)  / len(precisions),  4) if precisions  else 0,
+            'average_recall':    round(sum(recalls)     / len(recalls),     4) if recalls     else 0,
             'per_indicator': summary,
         }
